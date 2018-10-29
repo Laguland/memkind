@@ -28,6 +28,7 @@
 
 #include <sys/param.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <pthread.h>
 #include "common.h"
@@ -1159,4 +1160,47 @@ TEST_F(MemkindPmemTests, test_TC_MEMKIND_PmemMultithreadsStressKindsCreate)
     }
 
     free(threads);
+}
+
+TEST_F(MemkindPmemTests, test_TC_MEMKIND_CompareBlocksBeforeAndAferFree)
+{
+	struct memkind* kind = nullptr;
+	void* ptr[10000] = { nullptr };
+	struct stat st;
+	int stTest;
+	double blocksAvailable;
+
+	int err = memkind_create_pmem(PMEM_DIR, PMEM_PART_SIZE, &kind);
+	ASSERT_EQ(err, 0);
+
+	struct memkind_pmem* priv = (memkind_pmem*)kind->priv;
+	stTest = fstat(priv->fd, &st);
+	ASSERT_TRUE(stTest == 0);
+	blocksAvailable = st.st_blocks;
+
+	printf("Start blocks: %f\n", blocksAvailable);
+
+	for(int i = 0; i < 10000; ++i)
+	{
+		ptr[i] = memkind_malloc(kind, 32);
+		if (ptr == nullptr)
+			break;
+	}
+
+	stTest = fstat(priv->fd, &st);
+	ASSERT_TRUE(stTest == 0);
+	blocksAvailable = st.st_blocks;
+
+	printf("After malloc blocks: %f\n", blocksAvailable);
+
+	for (int i = 0; i < 10000; ++i)
+	{
+		memkind_free(kind, ptr[i]);
+	}
+
+	stTest = fstat(priv->fd, &st);
+	ASSERT_TRUE(stTest == 0);
+	blocksAvailable = st.st_blocks;
+
+	printf("After free blocks: %f\n", blocksAvailable);
 }
